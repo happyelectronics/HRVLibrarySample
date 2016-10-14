@@ -68,6 +68,7 @@ public class MainActivity extends AppCompatActivity implements IBTStatus, IOxiVi
                 oxiViewControl.startMeasure();*/
 
                 startUSBMeasure();
+                //startGeneratorMeasure();
 
             }
         });
