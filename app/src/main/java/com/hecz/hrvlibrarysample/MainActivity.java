@@ -41,6 +41,7 @@ public class MainActivity extends AppCompatActivity implements IBTStatus, IOxiVi
     private boolean isQuickConnect = true;
     private TextView textStatus;
     private String coherence = "-";
+    private boolean isGattServiceStarted = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -67,8 +68,10 @@ public class MainActivity extends AppCompatActivity implements IBTStatus, IOxiVi
 
                 oxiViewControl.startMeasure();*/
 
-                startUSBMeasure();
+
+                //startUSBMeasure();
                 //startGeneratorMeasure();
+                startGattMeasure(); //PolarH7
 
             }
         });
@@ -81,15 +84,24 @@ public class MainActivity extends AppCompatActivity implements IBTStatus, IOxiVi
         filter = new IntentFilter(BluetoothAdapter.ACTION_DISCOVERY_FINISHED);
         this.registerReceiver(mReceiver, filter);
 
+        filter = new IntentFilter(BluetoothLeHrService.ACTION_GATT_HR_FOUND);
+        this.registerReceiver(mReceiver, filter);
+
+
+
         textStatus = (TextView) findViewById(R.id.textStatus);
         textStatus.setText("Connecting...");
 
         //BluetoothDeviceLocator.getInstance().setMessageHandler(this);
         //showBluetoothState();
 
-        Settings.NAME = "spo2";
+        //Settings.NAME = "spo2";
+        Settings.NAME = "Gatt";
 
-
+        if(sDevice.equals("Gatt")) {
+            BluetoothLeHrService.start(this);
+            isGattServiceStarted = true;
+        }
     }
 
     @Override
@@ -129,10 +141,10 @@ public class MainActivity extends AppCompatActivity implements IBTStatus, IOxiVi
             String action = intent.getAction();
 
             // When discovery finds a device
-            //if (BluetoothLeHrService.ACTION_GATT_HR_FOUND.equals(action) && sDevice.equals(GATT)) {
-            //    isStartEnabled = true;
-            //    showBluetoothState();
-            if (SerialUSBService.USB_RR_DATA.equals(action)) {
+            if (BluetoothLeHrService.ACTION_GATT_HR_FOUND.equals(action)) {
+                isStartEnabled = true;
+                showBluetoothState();
+            } else if (SerialUSBService.USB_RR_DATA.equals(action)) {
                 if (oxiViewControl != null) {
                     IOxiObserver eventSource = oxiViewControl.getEventSource();
                     if (eventSource == null) {
@@ -252,6 +264,32 @@ public class MainActivity extends AppCompatActivity implements IBTStatus, IOxiVi
         oxiViewControl.subscribeData(this);
     }
 
+    private void startGattMeasure() {
+        isStartEnabled = true;
+
+        textStatus.setText("Measuring...");
+        Settings.isRRLog = true;
+        Settings.length = 120;
+
+        com.hecz.stresslocatorcommon.utils.Log.d(Global.APP_LOG_PREFIX, "START with this parameters:"
+                + " isRRLog = "+Settings.isRRLog
+                + " length = "+Settings.length);
+
+        IHrvData hrvData = new HrvData();
+        IOxiData oxiData = new OxiData(hrvData, SourceType.GATT);
+
+        OxiResponseHandler oxiResponseHandler = new OxiResponseHandler(
+                oxiData, hrvData);
+        HrvControl hrvControl = new HrvControl(oxiData, hrvData);
+        oxiViewControl = new OxiViewControl(oxiData, hrvControl,
+                oxiResponseHandler, BluetoothDeviceLocator.getInstance().getIOxiBt());
+        oxiViewControl.prepareMeasure(SourceType.GATT);
+
+        oxiViewControl.startMeasure();
+
+        oxiViewControl.subscribeData(this);
+    }
+
     private void startGeneratorMeasure() {
         stopBtChecking();
         isStartEnabled = true;
@@ -283,7 +321,18 @@ public class MainActivity extends AppCompatActivity implements IBTStatus, IOxiVi
     private void showBluetoothState() {
         com.hecz.stresslocatorcommon.utils.Log.i(Global.APP_LOG_PREFIX, "showBluetoothState");
 
-        if (sDevice.equals("StressLocator")) {
+        if (sDevice.equals("Gatt")) {
+            // Log.i(Global.APP_LOG_PREFIX, "discovering Gatt");
+            // BluetoothLeHrService.start(this);
+            if(!isGattServiceStarted) {
+                BluetoothLeHrService.start(this);
+                isGattServiceStarted = true;
+                isStartEnabled = false;
+            }
+            if (isStartEnabled) {
+
+            }
+        } else if (sDevice.equals("StressLocator")) {
 
             BluetoothLeHrService.stop(this);
             com.hecz.stresslocatorcommon.utils.Log.i(Global.APP_LOG_PREFIX, "showBluetoothState (2)"
