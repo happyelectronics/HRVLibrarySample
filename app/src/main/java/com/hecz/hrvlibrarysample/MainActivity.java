@@ -80,14 +80,15 @@ public class MainActivity extends AppCompatActivity implements IBTStatus, IOxiVi
         IntentFilter filter = new IntentFilter(BluetoothDevice.ACTION_FOUND);
         this.registerReceiver(mReceiver, filter);
 
-        // Register for broadcasts when discovery has finished
+        //Register for broadcasts when discovery has finished
         filter = new IntentFilter(BluetoothAdapter.ACTION_DISCOVERY_FINISHED);
         this.registerReceiver(mReceiver, filter);
 
         filter = new IntentFilter(BluetoothLeHrService.ACTION_GATT_HR_FOUND);
         this.registerReceiver(mReceiver, filter);
 
-
+        filter = new IntentFilter(BluetoothLeHrService.RR_DATA);
+        this.registerReceiver(mReceiver, filter);
 
         textStatus = (TextView) findViewById(R.id.textStatus);
         textStatus.setText("Connecting...");
@@ -95,13 +96,14 @@ public class MainActivity extends AppCompatActivity implements IBTStatus, IOxiVi
         //BluetoothDeviceLocator.getInstance().setMessageHandler(this);
         //showBluetoothState();
 
-        //Settings.NAME = "spo2";
-        Settings.NAME = "Gatt";
+        Settings.NAME = "spo2";
+        //Settings.NAME = "Gatt";
+        sDevice = "Gatt";
 
-        if(sDevice.equals("Gatt")) {
+        //if(sDevice.equals("Gatt")) {
             BluetoothLeHrService.start(this);
             isGattServiceStarted = true;
-        }
+        //}
     }
 
     @Override
@@ -131,6 +133,8 @@ public class MainActivity extends AppCompatActivity implements IBTStatus, IOxiVi
     private long lastTime = 0;
     private int nTime = 0;
     private int readCounter = 0;
+    private int usbpulse = 60;
+    private int usbspo2 = 99;
     /**
      * The BroadcastReceiver that listens for discovered devices and changes the
      * title when discovery is finished
@@ -140,9 +144,47 @@ public class MainActivity extends AppCompatActivity implements IBTStatus, IOxiVi
         public void onReceive(Context context, Intent intent) {
             String action = intent.getAction();
 
+            if (BluetoothLeHrService.RR_DATA.equals(action)) {
+                if (oxiViewControl != null) {
+                    IOxiObserver eventSource = oxiViewControl.getEventSource();
+                    if (eventSource == null) {
+                        return;
+                    }
+                    int rr;
+                    String rrd = intent
+                            .getStringExtra(BluetoothLeHrService.RR_DATA_INT);
+                    String[] rrda = rrd.split(";");
+                    for (int i = 0; i < rrda.length; i++) {
+                        if (rrda[i].length() > 0) {
+                            rr = Integer.parseInt(rrda[i]);
+                            eventSource.updateRR(rr, 0);
+                        }
+                    }
+                }
+
+                if (oxiViewControl != null) {
+                    IOxiObserver eventSource = oxiViewControl.getEventSource();
+                    if (eventSource == null) {
+                        return;
+                    }
+                    //int ad = intent.getIntExtra(SerialUSBService.USB_RR_DATA_INT, 0);
+
+                    int rr;
+                    String rrd = intent
+                            .getStringExtra(BluetoothLeHrService.RR_DATA_INT);
+                    String[] rrda = rrd.split(";");
+                    for (int i = 0; i < rrda.length; i++) {
+                        if (rrda[i].length() > 0) {
+                            rr = Integer.parseInt(rrda[i]);
+                            eventSource.updateRR(rr, 60*rr);
+                        }
+                    }
+                }
+            }
             // When discovery finds a device
             if (BluetoothLeHrService.ACTION_GATT_HR_FOUND.equals(action)) {
                 isStartEnabled = true;
+                startGattMeasure(); //PolarH7
                 showBluetoothState();
             } else if (SerialUSBService.USB_RR_DATA.equals(action)) {
                 if (oxiViewControl != null) {
@@ -168,6 +210,20 @@ public class MainActivity extends AppCompatActivity implements IBTStatus, IOxiVi
                     oxiBtData.ad = ad;
 
                     //oxiBtData.sar = 0;
+                    int ipulse = intent.getIntExtra(SerialUSBService.USB_PR_DATA_INT, -1);
+                    int ispo2 = intent.getIntExtra(SerialUSBService.USB_SPO2_DATA_INT, -1);
+                    if(ipulse > -1) {
+                        usbpulse = ipulse;
+                    }
+                    if(ispo2 > -1) {
+                        //Log.d(Settings.APP_LOG_PREFIX + "pulse", "pulse = " + usbpulse + ", spo2 = "+usbspo2);
+                        usbspo2 = ispo2;
+                    }
+
+
+                    oxiBtData.pulse = usbpulse;
+                    oxiBtData.spO2 = usbspo2;
+
                     oxiBtData.pulse = 70;
                     oxiBtData.spO2 = 99;
 
