@@ -219,13 +219,8 @@ public class MainActivity extends AppCompatActivity implements IBTStatus, IOxiVi
                         //Log.d(Settings.APP_LOG_PREFIX + "pulse", "pulse = " + usbpulse + ", spo2 = "+usbspo2);
                         usbspo2 = ispo2;
                     }
-
-
                     oxiBtData.pulse = usbpulse;
                     oxiBtData.spO2 = usbspo2;
-
-                    oxiBtData.pulse = 70;
-                    oxiBtData.spO2 = 99;
 
                     oxiBtData.readCounter = readCounter++;
 
