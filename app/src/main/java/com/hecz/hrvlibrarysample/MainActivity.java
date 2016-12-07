@@ -529,7 +529,7 @@ public class MainActivity extends AppCompatActivity implements IBTStatus, IOxiVi
     }
 
     @Override
-    public void showCurrentOxiData(int ad) {
+    public void showCurrentOxiData(long ad) {
         //msTime = oxiData.getRealTime();
 
         // ad is value for plethysmogram
