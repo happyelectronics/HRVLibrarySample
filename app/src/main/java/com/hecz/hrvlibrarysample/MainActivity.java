@@ -16,8 +16,11 @@ import android.view.MenuItem;
 import android.view.View;
 import android.widget.TextView;
 
+import com.hecz.stresslocatorcommon.model.OximeterData.DataParser;
+import com.hecz.stresslocatorcommon.model.OximeterData.PackageParser;
 import com.hecz.stresslocatorcommon.sensors.BluetoothDeviceLocator;
 import com.hecz.stresslocatorcommon.sensors.BluetoothLeHrService;
+import com.hecz.stresslocatorcommon.sensors.BluetoothLeService;
 import com.hecz.stresslocatorcommon.sensors.HrvControl;
 import com.hecz.stresslocatorcommon.sensors.IBTStatus;
 import com.hecz.stresslocatorcommon.sensors.IOxiObserver;
@@ -33,7 +36,7 @@ import com.hecz.stresslocatorhrv.model.OxiData;
 import com.hecz.stresslocatorhrv.model.Settings;
 import com.hecz.stresslocatorhrv.model.SourceType;
 
-public class MainActivity extends AppCompatActivity implements IBTStatus, IOxiViewSubscriber {
+public class MainActivity extends AppCompatActivity implements IBTStatus, IOxiViewSubscriber, PackageParser.OnDataChangeListener {
 
     private boolean isCheckingThread = false;
     private boolean isStartEnabled = false;
@@ -42,6 +45,7 @@ public class MainActivity extends AppCompatActivity implements IBTStatus, IOxiVi
     private TextView textStatus;
     private String coherence = "-";
     private boolean isGattServiceStarted = false;
+    private int sourceType;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -69,9 +73,9 @@ public class MainActivity extends AppCompatActivity implements IBTStatus, IOxiVi
                 oxiViewControl.startMeasure();*/
 
 
-                //startUSBMeasure();
+                startUSBMeasure();
                 //startGeneratorMeasure();
-                startGattMeasure(); //PolarH7
+                //startGattMeasure(); //PolarH7
 
             }
         });
@@ -96,13 +100,13 @@ public class MainActivity extends AppCompatActivity implements IBTStatus, IOxiVi
         //BluetoothDeviceLocator.getInstance().setMessageHandler(this);
         //showBluetoothState();
 
-        Settings.NAME = "spo2";
+        Settings.setNAME("spo2");
         //Settings.NAME = "Gatt";
-        sDevice = "Gatt";
+        sDevice = "USB";
 
         //if(sDevice.equals("Gatt")) {
-            BluetoothLeHrService.start(this);
-            isGattServiceStarted = true;
+        //    BluetoothLeHrService.start(this);
+        //    isGattServiceStarted = true;
         //}
     }
 
@@ -135,6 +139,10 @@ public class MainActivity extends AppCompatActivity implements IBTStatus, IOxiVi
     private int readCounter = 0;
     private int usbpulse = 60;
     private int usbspo2 = 99;
+
+    private DataParser mDataParser;
+
+    private PackageParser mPackageParser;
     /**
      * The BroadcastReceiver that listens for discovered devices and changes the
      * title when discovery is finished
@@ -143,6 +151,10 @@ public class MainActivity extends AppCompatActivity implements IBTStatus, IOxiVi
         @Override
         public void onReceive(Context context, Intent intent) {
             String action = intent.getAction();
+            if (BluetoothLeService.ACTION_SPO2_DATA_AVAILABLE.equals(action)) {
+                //Log.d(Settings.APP_LOG_PREFIX + "pulse", "ACTION_SPO2_DATA_AVAILABLE = ");
+                mDataParser.add(intent.getByteArrayExtra(BluetoothLeService.EXTRA_DATA));
+            }
 
             if (BluetoothLeHrService.RR_DATA.equals(action)) {
                 if (oxiViewControl != null) {
@@ -288,9 +300,31 @@ public class MainActivity extends AppCompatActivity implements IBTStatus, IOxiVi
 
         SerialUSBService.startActionStart(this, "", "");
 
+        sourceType = SourceType.USBOXI;
+
         textStatus.setText("Measuring...");
         Settings.isRRLog = true;
         Settings.length = 120;
+
+        Log.i(Global.APP_LOG_PREFIX, "Register USBAPP");
+                /*IntentFilter filter = new IntentFilter(
+                        SerialUSBService.USB_RR_DATA);
+                this.registerReceiver(mReceiver, filter);
+*/
+        mDataParser = new DataParser(DataParser.Protocol.AUTO, new DataParser.onPackageReceivedListener() {
+            @Override
+            public void onPackageReceived(int[] dat) {
+                //Log.i(Settings.APP_LOG_PREFIX, "onPackageReceived: " + Arrays.toString(dat));
+                if (mPackageParser == null) {
+                    mPackageParser = new PackageParser(MainActivity.this);
+                }
+
+                //mPackageParser.parseIsrael(dat);
+                //mPackageParser.parse(dat);
+                mPackageParser.parseAuto(mDataParser, dat);
+            }
+        });
+        mDataParser.start();
 
         com.hecz.stresslocatorcommon.utils.Log.d(Global.APP_LOG_PREFIX, "START with this parameters:"
                 + " isRRLog = "+Settings.isRRLog
@@ -298,7 +332,8 @@ public class MainActivity extends AppCompatActivity implements IBTStatus, IOxiVi
 
         IntentFilter filter = new IntentFilter(
                 SerialUSBService.USB_RR_DATA);
-        this.registerReceiver(mReceiver, filter);
+        //this.registerReceiver(mReceiver, filter);
+        this.registerReceiver(mReceiver, makeGattUpdateIntentFilter());
 
         IHrvData hrvData = new HrvData();
         IOxiData oxiData = new OxiData(hrvData, SourceType.USBOXI);
@@ -313,6 +348,16 @@ public class MainActivity extends AppCompatActivity implements IBTStatus, IOxiVi
         oxiViewControl.startMeasure();
 
         oxiViewControl.subscribeData(this);
+    }
+
+    private static IntentFilter makeGattUpdateIntentFilter() {
+        final IntentFilter intentFilter = new IntentFilter();
+        intentFilter.addAction(BluetoothLeService.ACTION_GATT_CONNECTED);
+        intentFilter.addAction(BluetoothLeService.ACTION_GATT_DISCONNECTED);
+        intentFilter.addAction(BluetoothLeService.ACTION_GATT_SERVICES_DISCOVERED);
+        intentFilter.addAction(BluetoothLeService.ACTION_DATA_AVAILABLE);
+        intentFilter.addAction(BluetoothLeService.ACTION_SPO2_DATA_AVAILABLE);
+        return intentFilter;
     }
 
     private void startGattMeasure() {
@@ -586,5 +631,83 @@ public class MainActivity extends AppCompatActivity implements IBTStatus, IOxiVi
     @Override
     public void disconnect() {
 
+    }
+
+    @Override
+    public void onSpO2ParamsChanged() {
+        if (oxiViewControl != null) {
+            IOxiObserver eventSource = oxiViewControl.getEventSource();
+            if (eventSource == null) {
+                return;
+            }
+
+            OxiBtData oxiBtData = new OxiBtData();
+            oxiBtData.signalStrenght = 0;
+
+            oxiBtData.rr = (double) mPackageParser.getOxiParams().rrInterval / 500.0;
+            oxiBtData.pulse = mPackageParser.getOxiParams().getPulseRate();
+            oxiBtData.spO2 = mPackageParser.getOxiParams().getSpo2();
+            oxiBtData.readCounter = readCounter++;
+
+            Log.d(Settings.APP_LOG_PREFIX + "ad", "onSpO2ParamsChanged - rr = " + oxiBtData.rr);
+
+            //eventSource.updateRR(mPackageParser.getOxiParams().rrInterval*2, oxiBtData.pulse);
+
+            eventSource.updateOxiData(oxiBtData);
+        }
+    }
+
+    @Override
+    public void onSpO2WaveChanged(long wave) {
+        if (oxiViewControl != null) {
+            IOxiObserver eventSource = oxiViewControl.getEventSource();
+            if (eventSource == null) {
+                return;
+            }
+            long ad = wave;
+
+            OxiBtData oxiBtData = new OxiBtData();
+            oxiBtData.signalStrenght = 0;
+            if (sourceType == SourceType.USBOXI) {
+                //usbtime += 0.0197;
+
+                if (mDataParser.mCurProtocol == DataParser.Protocol.ISRAEL) {
+                    //ISRAEL
+                    usbtime += 0.005;
+                } else {
+                    usbtime += 0.0197;
+                }
+            } else {
+
+                if (mDataParser.mCurProtocol == DataParser.Protocol.ISRAEL) {
+                    //ISRAEL
+                    usbtime += 0.005;
+                } else {
+                    usbtime += 0.01;
+                }
+            }
+            ;
+            if (lastTime == 0) {
+                lastTime = System.currentTimeMillis();
+            }
+            nTime++;
+            //Log.d(Settings.APP_LOG_PREFIX + "ad", "onSpO2WaveChanged - pulse = " + mPackageParser.getOxiParams().getPulseRate() + "time = " + ((double) (System.currentTimeMillis() - lastTime) / nTime));
+            //usbtime = System.currentTimeMillis()-lastTime;
+            oxiBtData.time = usbtime;///1000.0;
+            //drr = Math.abs(drr);
+            //if (drr > 10000) {
+            //    drr = 65536 - drr;
+            //}
+            oxiBtData.ad = ad;
+
+            //oxiBtData.sar = 0;
+            oxiBtData.pulse = mPackageParser.getOxiParams().getPulseRate();
+            oxiBtData.spO2 = mPackageParser.getOxiParams().getSpo2();
+            oxiBtData.readCounter = readCounter++;
+
+            //eventSource.updateRR(mPackageParser.getOxiParams().rrInterval*2, oxiBtData.pulse);
+
+            eventSource.updateOxiData(oxiBtData);
+        }
     }
 }
