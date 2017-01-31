@@ -311,7 +311,7 @@ public class MainActivity extends AppCompatActivity implements IBTStatus, IOxiVi
                         SerialUSBService.USB_RR_DATA);
                 this.registerReceiver(mReceiver, filter);
 */
-        mDataParser = new DataParser(DataParser.Protocol.AUTO, new DataParser.onPackageReceivedListener() {
+        mDataParser = new DataParser(DataParser.Protocol.ISRAEL, new DataParser.onPackageReceivedListener() {
             @Override
             public void onPackageReceived(int[] dat) {
                 //Log.i(Settings.APP_LOG_PREFIX, "onPackageReceived: " + Arrays.toString(dat));
