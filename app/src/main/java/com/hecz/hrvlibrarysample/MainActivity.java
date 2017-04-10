@@ -644,12 +644,16 @@ public class MainActivity extends AppCompatActivity implements IBTStatus, IOxiVi
             OxiBtData oxiBtData = new OxiBtData();
             oxiBtData.signalStrenght = 0;
 
-            oxiBtData.rr = (double) mPackageParser.getOxiParams().rrInterval / 500.0;
+            oxiBtData.rr = (double) mPackageParser.getOxiParams().rrInterval / 1000.0;
             oxiBtData.pulse = mPackageParser.getOxiParams().getPulseRate();
             oxiBtData.spO2 = mPackageParser.getOxiParams().getSpo2();
             oxiBtData.readCounter = readCounter++;
 
             Log.d(Settings.APP_LOG_PREFIX + "ad", "onSpO2ParamsChanged - rr = " + oxiBtData.rr);
+
+            if(mDataParser.mCurProtocol == DataParser.Protocol.ISRAEL) {
+                oxiBtData.time = (System.currentTimeMillis() - lastTime)/1000.0;
+            }
 
             //eventSource.updateRR(mPackageParser.getOxiParams().rrInterval*2, oxiBtData.pulse);
 
@@ -693,12 +697,17 @@ public class MainActivity extends AppCompatActivity implements IBTStatus, IOxiVi
             nTime++;
             //Log.d(Settings.APP_LOG_PREFIX + "ad", "onSpO2WaveChanged - pulse = " + mPackageParser.getOxiParams().getPulseRate() + "time = " + ((double) (System.currentTimeMillis() - lastTime) / nTime));
             //usbtime = System.currentTimeMillis()-lastTime;
-            oxiBtData.time = usbtime;///1000.0;
+            if(mDataParser.mCurProtocol == DataParser.Protocol.ISRAEL) {
+                oxiBtData.time = (System.currentTimeMillis() - lastTime)/1000.0;
+            } else {
+                oxiBtData.time = usbtime;///1000.0;
+            }
             //drr = Math.abs(drr);
             //if (drr > 10000) {
             //    drr = 65536 - drr;
             //}
             oxiBtData.ad = ad;
+            oxiBtData.rr = 0;
 
             //oxiBtData.sar = 0;
             oxiBtData.pulse = mPackageParser.getOxiParams().getPulseRate();
